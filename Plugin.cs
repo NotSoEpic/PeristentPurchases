@@ -26,8 +26,19 @@ namespace LethalAssist
             log.LogMessage("Plugin Persistent Purchases is loaded!");
         }
 
+        public static int[] suits = { 0, 1, 2, 3 }; // orange, green, yellow, pajamas
+        public static int[] upgrades = { 5, 18, 19 }; // teleporter, horn, inv teleporter
+
         public static bool shouldReset(int id, string debugType)
         {
+            if (suits.Contains(id))
+            {
+                return false;
+            }
+            if (upgrades.Contains(id))
+            {
+                return true;
+            }
             return false;
         }
     }
@@ -39,7 +50,7 @@ public class Patches
     [HarmonyPrefix, HarmonyPatch(typeof(GameNetworkManager), nameof(GameNetworkManager.ResetUnlockablesListValues))]
     public static bool dontResetAnything()
     {
-        /*if (StartOfRound.Instance != null)
+        if (StartOfRound.Instance != null)
         {
             UnityEngine.Debug.Log("CONDITIONALLY resetting unlockables list!");
             List<UnlockableItem> list = StartOfRound.Instance.unlockablesList.unlockables;
@@ -57,12 +68,12 @@ public class Patches
                     }
                 }
             }
-        }*/
+        }
         return false; // skip original function
     }
 
 
-    // [HarmonyPostfix, HarmonyPatch(typeof(GameNetworkManager), nameof(GameNetworkManager.ResetSavedGameValues))]
+    [HarmonyPostfix, HarmonyPatch(typeof(GameNetworkManager), nameof(GameNetworkManager.ResetSavedGameValues))]
     public static void okayMaybeDoALittleResetting()
     {
         if (ES3.KeyExists("UnlockedShipObjects", GameNetworkManager.Instance.currentSaveFileName))
@@ -177,9 +188,11 @@ public class ResetShip {
         Plugin.log.LogWarning("Beginning transpilation of StartOfRound.ResetShip()");
         var codes = new List<CodeInstruction>(instructions);
 
-        List<Tuple<int, CodeInstruction>> jumpTos = new List<Tuple<int, CodeInstruction>>();
-        int p1 = -1;
-        CodeInstruction jumpTo1 = null;
+        int prefabI1 = -1;
+        CodeInstruction prefabJ1 = null;
+
+        int prefabI2 = -1;
+        CodeInstruction prefabJ2 = null;
 
         int p2 = -1;
 
@@ -187,16 +200,20 @@ public class ResetShip {
         {
             if (codes[i].opcode == OpCodes.Ldfld && codes[i].operand.ToString() == "System.Boolean spawnPrefab")
             {
-                CodeInstruction temp = codes[i + 1].Clone();
-                temp.opcode = OpCodes.Br;
-                jumpTos.Add(Tuple.Create(i + 2, temp));
-                /*if (p1 == -1)
+                if (prefabI1 == -1)
                 {
-                    p1 = i + 2;
-                    jumpTo1 = codes[i + 1].Clone();
-                    jumpTo1.opcode = OpCodes.Brfalse_S;
+                    prefabI1 = i + 2;
+                    prefabJ1 = codes[i + 1].Clone();
+                    prefabJ1.opcode = OpCodes.Brfalse_S;
                     Plugin.log.LogInfo($"Found ship object prefab opcode at {i} (1)");
-                }*/
+                }
+                else if (prefabI2 == -1)
+                {
+                    prefabI2 = i + 2;
+                    prefabJ2 = codes[i + 1].Clone();
+                    prefabJ2.opcode = OpCodes.Br;
+                    Plugin.log.LogInfo($"Found ship object prefab opcode at {i} (1)");
+                }
             }
             if (codes[i].opcode == OpCodes.Call && codes[i].operand.ToString() == "Void SwitchSuitForPlayer(GameNetcodeStuff.PlayerControllerB, Int32, Boolean)")
             {
@@ -214,34 +231,21 @@ public class ResetShip {
         {
             codes.RemoveRange(p2 - 6, 7);
         }
-        for (var i = jumpTos.Count - 1; i >= 0; i--)
+
+        if (prefabI2 >= 0)
         {
-            codes.Insert(jumpTos[i].Item1, jumpTos[i].Item2);
-        }
-        if (p1 >= 0)
-        {
-            /*
-             *     INSERTS:
-             * ldloc.3                          // loads i onto stack
-             * callvirt  Plugin.shouldReset     // inputs i to function, storing boolean output on stack
-             * brfalse.s IL_0177                // skips to next iteration if shouldReset returned false
-             * 
-             * if (!this.unlockablesList.unlockables[i].alreadyUnlocked && this.unlockablesList.unlockables[i].spawnPrefab)
-             *     ->
-             * if (... && Plugins.shouldReset(i))
-             */
-            jumpTo1.opcode = OpCodes.Br;
-            codes.InsertRange(p1, new CodeInstruction[] {
-                // new CodeInstruction(OpCodes.Ldloc_3),
-                // new CodeInstruction(OpCodes.Ldstr, "StartOfRound1"),
-                // new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(Plugin), nameof(Plugin.shouldReset))),
-                jumpTo1
-            });
+            codes.Insert(prefabI2, prefabJ2);
         }
 
-        for(var i = 0; i < codes.Count; i++)
+        if (prefabI1 >= 0)
         {
-            Plugin.log.LogInfo(codes[i].ToString());
+            codes.InsertRange(prefabI1, new CodeInstruction[]
+            {
+                new CodeInstruction(OpCodes.Ldloc_3),
+                new CodeInstruction(OpCodes.Ldstr, "StartOfRound1"),
+                new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(Plugin), nameof(Plugin.shouldReset))),
+                prefabJ1
+            });
         }
 
         return codes.AsEnumerable();
