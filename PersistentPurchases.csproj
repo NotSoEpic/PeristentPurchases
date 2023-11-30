@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <AssemblyName>LethalAssist</AssemblyName>
-    <Description>My first plugin</Description>
+    <AssemblyName>PersistentPurchases</AssemblyName>
+    <Description>Bought cosmetics never leave you</Description>
     <Version>1.0.0</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
