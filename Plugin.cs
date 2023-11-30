@@ -1,14 +1,14 @@
 ﻿using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
-using LethalAssist;
+using PersistentPurchases;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using UnityEngine;
 
-namespace LethalAssist
+namespace PersistentPurchases
 {
     [BepInPlugin("beeisyou.PersistentPurchases", "Persistent Purchases", "1.0.0")]
     public class Plugin : BaseUnityPlugin
