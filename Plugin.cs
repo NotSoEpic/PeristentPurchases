@@ -13,7 +13,7 @@ using UnityEngine.Pool;
 
 namespace PersistentPurchases
 {
-    [BepInPlugin("beeisyou.PersistentPurchases", "Persistent Purchases", "1.0.0")]
+    [BepInPlugin("beeisyou.PersistentPurchases", "Persistent Purchases", "1.1.0")]
     public class Plugin : BaseUnityPlugin
     {
         private static ConfigEntry<bool> resetSuits;
@@ -46,22 +46,32 @@ namespace PersistentPurchases
 
         public static bool shouldReset(int id, string debugType="")
         {
-            if (suits.Contains(id) && !resetSuits.Value)
+            if (suits.Contains(id))
             {
-                return false;
+                if (!resetSuits.Value)
+                {
+                    log.LogInfo($"Not resetting {id} {debugType}");
+                    return false;
+                }
             }
-            else if (upgrades.Contains(id) && !resetUpgrades.Value)
+            else if (upgrades.Contains(id))
             {
-                return false;
+                if (!resetUpgrades.Value) {
+                    log.LogInfo($"Not resetting {id} {debugType}");
+                    return false;
+                }
             }
             else if (!resetFurniture.Value)
             {
+                log.LogInfo($"Not resetting {id} {debugType}");
                 return false;
             }
             if (defaults.Contains(id))
             {
+                log.LogInfo($"Not resetting {id} {debugType}");
                 return false;
             }
+            log.LogInfo($"Is resetting {id} {debugType}");
             return true;
         }
 
@@ -75,7 +85,7 @@ namespace PersistentPurchases
 [HarmonyPatch]
 public class Patches
 {
-    /*[HarmonyPrefix, HarmonyPatch(typeof(GameNetworkManager), nameof(GameNetworkManager.ResetUnlockablesListValues))]
+    [HarmonyPrefix, HarmonyPatch(typeof(GameNetworkManager), nameof(GameNetworkManager.ResetUnlockablesListValues))]
     public static bool dontResetAnything()
     {
         if (StartOfRound.Instance != null)
@@ -99,7 +109,7 @@ public class Patches
             }
         }
         return false; // skip original function
-    }*/
+    }
 
 
     [HarmonyPostfix, HarmonyPatch(typeof(GameNetworkManager), nameof(GameNetworkManager.ResetSavedGameValues))]
@@ -134,7 +144,18 @@ public class Patches
             UnlockableItem item = StartOfRound.Instance.unlockablesList.unlockables[array[i].unlockableID];
             if (item.spawnPrefab)
             {
-                item.inStorage = true;
+                if (item.hasBeenUnlockedByPlayer && !Plugin.shouldReset(array[i].unlockableID))
+                {
+                    if (Plugin.shouldDefault())
+                    {
+                        item.inStorage = true;
+                    }
+                }
+                else
+                {
+                    item.hasBeenUnlockedByPlayer = false;
+                    item.inStorage = false;
+                }
                 Collider[] componentsInChildren = array[i].parentObject.GetComponentsInChildren<Collider>();
                 for (int j = 0; j < componentsInChildren.Length; j++)
                 {
@@ -153,13 +174,13 @@ public class Patches
                 {
                     if (Plugin.shouldReset(array[i].unlockableID))
                     {
-                        item.hasBeenUnlockedByPlayer = true;
-                        item.inStorage = true;
+                        item.hasBeenUnlockedByPlayer = false;
+                        item.inStorage = false;
                     } 
                     else
                     {
-                        item.hasBeenUnlockedByPlayer = false;
-                        item.inStorage = false;
+                        item.hasBeenUnlockedByPlayer = true;
+                        item.inStorage = true;
                     }
                     array[i].parentObject.disableObject = true;
                     ShipBuildModeManager.Instance.StoreObjectServerRpc(
@@ -173,7 +194,7 @@ public class Patches
         for (int i = 0; i < StartOfRound.Instance.unlockablesList.unlockables.Count; i++)
         {
             UnlockableItem item = StartOfRound.Instance.unlockablesList.unlockables[i];
-            if (!item.alreadyUnlocked && item.spawnPrefab)
+            if (!item.alreadyUnlocked && item.spawnPrefab && Plugin.shouldReset(i))
             {
                 GameObject gameObject;
                 if (!StartOfRound.Instance.SpawnedShipUnlockables.TryGetValue(i, out gameObject))
